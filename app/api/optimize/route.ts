@@ -102,6 +102,7 @@ FORMATTING RULES:
 - Use plain hyphens (-) for bullet points, no special characters
 - No tables, columns, icons, or complex layouts
 - Maintain consistent spacing: one blank line between sections, no extra blank lines within sections
+- Skills section: list as a single comma-separated line, maximum 12 skills — prioritize the most relevant and impactful ones
 
 PDF READINESS:
 - The rewritten_resume field must be plain text that translates cleanly into a professional PDF

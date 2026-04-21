@@ -122,15 +122,10 @@ export default function ResultsPage() {
       <h2 style="${sectionHeader}">Skills</h2>
       ${skillCategories.length
         ? skillCategories.map((cat) => `
-          <div style="margin-top:5px">
-            ${cat.label ? `<span style="font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#555">${esc(cat.label)}: </span>` : ""}
-            <div style="columns:4;column-gap:10px;margin-top:2px">
-              ${cat.items.map((s) => `<div style="break-inside:avoid;font-size:9.5px;margin-bottom:2px">${esc(s)}</div>`).join("")}
-            </div>
-          </div>`).join("")
-        : `<div style="columns:4;column-gap:10px;margin-top:4px">
-            ${skills.map((s) => `<div style="break-inside:avoid;font-size:9.5px;margin-bottom:2px">${esc(s)}</div>`).join("")}
-          </div>`
+          <p style="font-size:10px;line-height:1.5;margin-top:2px">
+            ${cat.label ? `<strong style="font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;color:#555">${esc(cat.label)}: </strong>` : ""}${cat.items.map(esc).join(", ")}
+          </p>`).join("")
+        : `<p style="font-size:10px;line-height:1.5;margin-top:4px">${skills.map(esc).join(", ")}</p>`
       }
     </div>
 

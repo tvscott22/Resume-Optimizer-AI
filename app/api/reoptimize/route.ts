@@ -15,7 +15,8 @@ STRICT RULES:
 - Maintain ATS-friendly plain text formatting
 - Keep language concise, results-oriented, and action-verb led
 - Use hyphens (-) for bullet points, no special characters
-- Sections in this order: Summary, Experience, Skills`;
+- Sections in this order: Summary, Experience, Skills
+- Skills section: list as a single comma-separated line, maximum 12 skills — prioritize the most relevant and impactful ones`;
 
 export async function POST(req: NextRequest) {
   try {
