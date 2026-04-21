@@ -1,7 +1,73 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { safeParseJson, isValidResult } from "@/lib/parseJson";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Set to true to skip the Claude API and return mock data for UI testing
+const MOCK_MODE = !process.env.ANTHROPIC_API_KEY?.startsWith("sk-ant-");
+
+const MOCK_RESPONSE = {
+  match_analysis: {
+    summary:
+      "Strong overall match. The candidate's background in software engineering aligns well with the role's core requirements, particularly around backend systems and cross-functional collaboration. A few gaps exist around specific tooling mentioned in the job description.",
+    key_strengths: [
+      "5+ years of backend engineering experience",
+      "Proven track record of shipping at scale",
+      "Strong communication and cross-team collaboration",
+    ],
+    gaps_or_weaknesses: [
+      "No explicit mention of Kubernetes or container orchestration",
+      "Limited public-facing work on distributed systems",
+    ],
+    keywords_to_emphasize: [
+      "REST APIs",
+      "distributed systems",
+      "CI/CD",
+      "TypeScript",
+      "system design",
+    ],
+  },
+  rewritten_resume: `Jane Smith
+jane@example.com | linkedin.com/in/janesmith | github.com/janesmith
+
+SUMMARY
+Results-driven software engineer with 5+ years of experience building scalable backend systems and REST APIs. Adept at cross-functional collaboration and delivering high-impact features in fast-moving environments. Passionate about clean architecture and developer productivity.
+
+EXPERIENCE
+
+Acme Corp — Senior Software Engineer
+Jan 2021 – Present
+- Designed and shipped a distributed event-processing pipeline handling 50M+ events/day, reducing latency by 40%
+- Led migration of monolithic services to microservices architecture, improving deployment frequency by 3x
+- Partnered with product and design to define technical requirements and deliver features on schedule
+
+Startup Inc — Software Engineer
+Jun 2018 – Dec 2020
+- Built and maintained REST APIs serving 200K+ daily active users
+- Implemented CI/CD pipelines using GitHub Actions, cutting release cycles from 2 weeks to 2 days
+- Mentored 2 junior engineers and led bi-weekly technical design reviews
+
+SKILLS
+TypeScript, Node.js, Python, PostgreSQL, Redis, REST APIs, distributed systems, CI/CD, system design, Docker`,
+  bullet_improvements: [
+    {
+      original: "Worked on backend services for the platform",
+      improved:
+        "Designed and maintained backend services powering core platform features, supporting 200K+ daily active users",
+    },
+    {
+      original: "Helped with CI/CD setup",
+      improved:
+        "Implemented end-to-end CI/CD pipelines using GitHub Actions, reducing release cycles from 2 weeks to 2 days",
+    },
+    {
+      original: "Collaborated with other teams",
+      improved:
+        "Partnered cross-functionally with product, design, and data teams to define requirements and ship features on schedule",
+    },
+  ],
+  summary_section:
+    "Results-driven software engineer with 5+ years of experience building scalable backend systems and REST APIs. Adept at cross-functional collaboration and delivering high-impact features in fast-moving environments. Passionate about clean architecture, system design, and developer productivity.",
+};
 
 const SYSTEM_PROMPT = `You are an expert resume strategist and former recruiter.
 
@@ -14,6 +80,28 @@ STRICT RULES:
 - Keep language concise, sharp, and results-oriented
 - Avoid fluff and generic phrases
 
+KEYWORD STRATEGY:
+- Extract the most important keywords from the job description
+- Integrate them naturally into bullet points and skills sections
+- Do NOT keyword stuff or repeat keywords unnaturally
+- Prioritize contextual usage over frequency
+
+FORMATTING RULES:
+- Output a clean, single-column, ATS-friendly resume
+- Use only these standard sections in this order: Summary, Experience, Skills
+- Every bullet point must:
+  - Start with a strong action verb
+  - Include measurable impact or results when possible
+  - Be concise — 1 to 2 lines maximum
+- Use plain hyphens (-) for bullet points, no special characters
+- No tables, columns, icons, or complex layouts
+- Maintain consistent spacing: one blank line between sections, no extra blank lines within sections
+
+PDF READINESS:
+- The rewritten_resume field must be plain text that translates cleanly into a professional PDF
+- Use only standard ASCII characters
+- Structure must be consistent and predictable for clean rendering
+
 GOAL:
 Align the candidate's real experience as closely as possible with the job description, improving clarity, keyword alignment, and impact.`;
 
@@ -22,10 +110,22 @@ export async function POST(req: NextRequest) {
     const { resume, jobDescription } = await req.json();
 
     if (!resume?.trim() || !jobDescription?.trim()) {
-      return NextResponse.json({ error: "resume and jobDescription are required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "resume and jobDescription are required." },
+        { status: 400 }
+      );
     }
 
-    const userMessage = `Here is a candidate's resume:
+    if (MOCK_MODE) {
+      await new Promise((r) => setTimeout(r, 1200));
+      return NextResponse.json(MOCK_RESPONSE);
+    }
+
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const userMessage = `Return ONLY valid JSON. No markdown, no backticks, no explanation outside the JSON.
+
+Here is a candidate's resume:
 
 ${resume}
 
@@ -33,30 +133,30 @@ Here is the job description:
 
 ${jobDescription}
 
-Return your response in JSON with the following structure:
+Rewrite the resume following ALL formatting and keyword rules from your instructions. The rewritten_resume must:
+- Use only plain text with sections in this order: Summary, Experience, Skills
+- Use hyphens (-) for bullet points
+- Have one blank line between sections
+- Contain no special characters, tables, or symbols
+
+Return exactly this JSON structure and nothing else:
 
 {
   "match_analysis": {
-    "summary": "...",
-    "key_strengths": ["..."],
-    "gaps_or_weaknesses": ["..."],
-    "keywords_to_emphasize": ["..."]
+    "summary": "2-3 sentence overview of fit",
+    "key_strengths": ["strength 1", "strength 2"],
+    "gaps_or_weaknesses": ["gap 1", "gap 2"],
+    "keywords_to_emphasize": ["keyword1", "keyword2"]
   },
-  "rewritten_resume": "...",
+  "rewritten_resume": "full rewritten resume as plain text",
   "bullet_improvements": [
     {
-      "original": "...",
-      "improved": "..."
+      "original": "original bullet point",
+      "improved": "improved bullet point"
     }
   ],
-  "summary_section": "..."
-}
-
-IMPORTANT:
-- Do not fabricate experience
-- Keep rewritten resume clean and ready to use
-- Maintain truthful representation
-- Return ONLY valid JSON, no markdown code fences`;
+  "summary_section": "suggested professional summary paragraph"
+}`;
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -65,17 +165,17 @@ IMPORTANT:
       messages: [{ role: "user", content: userMessage }],
     });
 
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
+    const rawText =
+      message.content[0].type === "text" ? message.content[0].text : "";
 
-    let parsed;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return NextResponse.json({ error: "Failed to parse AI response." }, { status: 500 });
-      }
-      parsed = JSON.parse(jsonMatch[0]);
+    const parsed = safeParseJson(rawText);
+
+    if (!isValidResult(parsed)) {
+      const raw = "error" in parsed ? parsed.raw : rawText;
+      return NextResponse.json(
+        { error: "Failed to parse AI response.", raw },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(parsed);
