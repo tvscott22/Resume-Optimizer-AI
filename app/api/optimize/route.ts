@@ -67,6 +67,12 @@ TypeScript, Node.js, Python, PostgreSQL, Redis, REST APIs, distributed systems, 
   ],
   summary_section:
     "Results-driven software engineer with 5+ years of experience building scalable backend systems and REST APIs. Adept at cross-functional collaboration and delivering high-impact features in fast-moving environments. Passionate about clean architecture, system design, and developer productivity.",
+  follow_up_questions: [
+    "Have you worked with container orchestration tools like Kubernetes or Docker Swarm? This role lists it as a key requirement but it's not mentioned in your resume.",
+    "Did you own or contribute to any system design decisions at Acme Corp? The JD emphasizes architectural thinking.",
+    "Have you worked in an on-call rotation or owned production reliability for any of your systems?",
+    "Were there any mentorship or leadership responsibilities in your recent roles beyond what's listed?",
+  ],
 };
 
 const SYSTEM_PROMPT = `You are an expert resume strategist and former recruiter.
@@ -101,6 +107,13 @@ PDF READINESS:
 - The rewritten_resume field must be plain text that translates cleanly into a professional PDF
 - Use only standard ASCII characters
 - Structure must be consistent and predictable for clean rendering
+
+FOLLOW-UP QUESTIONS:
+- After analyzing the resume against the job description, generate 3-5 targeted follow-up questions
+- Each question should reference a specific gap, requirement, or keyword from the JD that isn't addressed in the resume
+- Questions should prompt the user to think of real experience they may have forgotten to include
+- Keep questions concise and specific — not generic
+- Do NOT ask about skills or experience already present in the resume
 
 GOAL:
 Align the candidate's real experience as closely as possible with the job description, improving clarity, keyword alignment, and impact.`;
@@ -155,7 +168,12 @@ Return exactly this JSON structure and nothing else:
       "improved": "improved bullet point"
     }
   ],
-  "summary_section": "suggested professional summary paragraph"
+  "summary_section": "suggested professional summary paragraph",
+  "follow_up_questions": [
+    "Question 1 — reference a specific gap or requirement from the JD and ask if the candidate has relevant experience not yet mentioned",
+    "Question 2",
+    "Question 3"
+  ]
 }`;
 
     const message = await client.messages.create({

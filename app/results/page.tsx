@@ -21,6 +21,7 @@ interface OptimizeResult {
   rewritten_resume: string;
   bullet_improvements: BulletImprovement[];
   summary_section: string;
+  follow_up_questions: string[];
   originalResume: string;
   jobDescription: string;
 }
@@ -34,6 +35,10 @@ export default function ResultsPage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [bulletsOpen, setBulletsOpen] = useState(true);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [reoptimizing, setReoptimizing] = useState(false);
+  const [reoptimizeError, setReoptimizeError] = useState("");
+  const [reoptimized, setReoptimized] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState("");
@@ -279,6 +284,46 @@ export default function ResultsPage() {
     }
   }
 
+  async function handleReoptimize() {
+    if (!result) return;
+    setReoptimizing(true);
+    setReoptimizeError("");
+    try {
+      const answerPayload = (result.follow_up_questions || []).map((q, i) => ({
+        question: q,
+        answer: answers[i] || "",
+      }));
+      const res = await fetch("/api/reoptimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume: result.rewritten_resume,
+          jobDescription: result.jobDescription,
+          answers: answerPayload,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Re-optimization failed.");
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              rewritten_resume: data.rewritten_resume,
+              summary_section: data.summary_section ?? prev.summary_section,
+              bullet_improvements: data.bullet_improvements?.length
+                ? data.bullet_improvements
+                : prev.bullet_improvements,
+            }
+          : prev
+      );
+      setReoptimized(true);
+    } catch (err: unknown) {
+      setReoptimizeError(err instanceof Error ? err.message : "Unexpected error.");
+    } finally {
+      setReoptimizing(false);
+    }
+  }
+
   async function handleGenerateCoverLetter() {
     if (!result) return;
     setCoverLoading(true);
@@ -445,6 +490,79 @@ export default function ResultsPage() {
               {summary_section}
             </p>
           </section>
+        )}
+
+        {/* Follow-up Questions */}
+        {result.follow_up_questions?.length > 0 && !reoptimized && (
+          <section className="mb-5 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+            <div className="mb-5">
+              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-1">
+                Surface Hidden Experience
+              </h2>
+              <p className="text-sm text-gray-500 leading-relaxed">
+                Answer what applies — skip the rest. Claude will weave your answers into a stronger resume.
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              {result.follow_up_questions.map((q, i) => (
+                <div key={i}>
+                  <p className="text-sm text-gray-700 font-medium mb-2 leading-relaxed">
+                    <span className="text-blue-500 font-bold mr-2">{i + 1}.</span>
+                    {q}
+                  </p>
+                  <textarea
+                    rows={2}
+                    placeholder="Type your answer, or leave blank to skip…"
+                    value={answers[i] || ""}
+                    onChange={(e) => setAnswers((prev) => ({ ...prev, [i]: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 placeholder:text-gray-400 leading-relaxed"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {reoptimizeError && (
+              <p className="mt-4 text-sm text-red-500">{reoptimizeError}</p>
+            )}
+
+            <div className="mt-5 flex items-center justify-between gap-4">
+              <p className="text-xs text-gray-400">
+                Only answered questions will be used.
+              </p>
+              <button
+                onClick={handleReoptimize}
+                disabled={reoptimizing || Object.values(answers).every((a) => !a?.trim())}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                {reoptimizing ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Re-optimizing…
+                  </>
+                ) : (
+                  <>
+                    Re-optimize Resume
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {reoptimized && (
+          <div className="mb-5 flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-100 rounded-xl">
+            <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <p className="text-sm text-green-700 font-medium">Resume updated with your additional experience.</p>
+          </div>
         )}
 
         {/* Resume Comparison */}
