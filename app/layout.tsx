@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PasswordGate from "@/components/PasswordGate";
 
 export const metadata: Metadata = {
   title: "Resume Optimizer",
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </header>
-        {children}
+        <PasswordGate>{children}</PasswordGate>
       </body>
     </html>
   );
