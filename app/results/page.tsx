@@ -43,6 +43,15 @@ export default function ResultsPage() {
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [semanticScore, setSemanticScore] = useState<number | null>(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
+
+  type InjectEntry = {
+    status: "loading" | "done" | "applied";
+    originalBullet: string;
+    improvedBullet: string;
+  };
+  const [injectMap, setInjectMap] = useState<Record<string, InjectEntry>>({});
 
   useEffect(() => {
     const raw = sessionStorage.getItem("optimizeResult");
@@ -52,6 +61,22 @@ export default function ResultsPage() {
     }
     setResult(JSON.parse(raw));
   }, [router]);
+
+  useEffect(() => {
+    if (!result) return;
+    const keywords = result.match_analysis.keywords_to_emphasize;
+    if (!keywords?.length) return;
+    setScoreLoading(true);
+    fetch("/api/semantic-score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keywords, resume: result.rewritten_resume }),
+    })
+      .then((r) => r.json())
+      .then((data) => setSemanticScore(typeof data.score === "number" ? data.score : null))
+      .catch(() => setSemanticScore(null))
+      .finally(() => setScoreLoading(false));
+  }, [result]);
 
   function handleSave() {
     if (!result) return;
@@ -389,6 +414,67 @@ export default function ResultsPage() {
     }
   }
 
+  function findBestBullet(keyword: string, resumeText: string): string | null {
+    const props = parseResumeToProps(resumeText, "");
+    const allBullets = props.experience.flatMap((job) => job.bullets);
+    if (!allBullets.length) return null;
+    const kwWords = keyword.toLowerCase().split(/\s+/);
+    let best = { bullet: allBullets[0], score: -1 };
+    for (const bullet of allBullets) {
+      const bLower = bullet.toLowerCase();
+      const score = kwWords.filter((w) => bLower.includes(w)).length;
+      if (score > best.score) best = { bullet, score };
+    }
+    return best.bullet;
+  }
+
+  async function handleInjectKeyword(keyword: string) {
+    if (!result) return;
+    const bullet = findBestBullet(keyword, result.rewritten_resume);
+    if (!bullet) return;
+    setInjectMap((prev) => ({ ...prev, [keyword]: { status: "loading", originalBullet: bullet, improvedBullet: "" } }));
+    try {
+      const res = await fetch("/api/inject-keyword", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, bullet }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setInjectMap((prev) => ({
+        ...prev,
+        [keyword]: { status: "done", originalBullet: bullet, improvedBullet: data.improved_bullet },
+      }));
+    } catch {
+      setInjectMap((prev) => {
+        const next = { ...prev };
+        delete next[keyword];
+        return next;
+      });
+    }
+  }
+
+  function handleApplyBullet(keyword: string) {
+    if (!result) return;
+    const entry = injectMap[keyword];
+    if (!entry) return;
+    setResult((prev) =>
+      prev
+        ? { ...prev, rewritten_resume: prev.rewritten_resume.replace(entry.originalBullet, entry.improvedBullet) }
+        : prev
+    );
+    setSemanticScore(null);
+    setInjectMap((prev) => ({ ...prev, [keyword]: { ...entry, status: "applied" } }));
+  }
+
+  function handleDismissBullet(keyword: string) {
+    setInjectMap((prev) => {
+      const next = { ...prev };
+      delete next[keyword];
+      return next;
+    });
+  }
+
   if (!result) return null;
 
   const {
@@ -422,9 +508,31 @@ export default function ResultsPage() {
 
         {/* Match Analysis */}
         <section className="mb-5 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
-            Match Analysis
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+              Match Analysis
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Semantic Match</span>
+              {scoreLoading ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-400">
+                  <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Scoring…
+                </span>
+              ) : semanticScore !== null ? (
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                  semanticScore >= 75 ? "bg-green-100 text-green-700" :
+                  semanticScore >= 50 ? "bg-yellow-100 text-yellow-700" :
+                  "bg-red-100 text-red-600"
+                }`}>
+                  {semanticScore}%
+                </span>
+              ) : null}
+            </div>
+          </div>
           <p className="text-sm text-gray-600 leading-relaxed mb-5">
             {match_analysis.summary}
           </p>
@@ -457,20 +565,86 @@ export default function ResultsPage() {
               </ul>
             </div>
 
-            <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-3">
-                Keywords to Emphasize
-              </h3>
-              <div className="flex flex-wrap gap-1.5">
-                {match_analysis.keywords_to_emphasize.map((k, i) => (
-                  <span
-                    key={i}
-                    className="px-2.5 py-1 bg-white text-blue-700 text-xs rounded-full border border-blue-200 font-medium"
-                  >
-                    {k}
-                  </span>
-                ))}
-              </div>
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 md:col-span-1">
+              {(() => {
+                const resumeLower = rewritten_resume.toLowerCase();
+                const matched = match_analysis.keywords_to_emphasize.filter((k) => resumeLower.includes(k.toLowerCase()));
+                const missing = match_analysis.keywords_to_emphasize.filter((k) => !resumeLower.includes(k.toLowerCase()));
+                return (
+                  <>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-3">
+                      Keywords{" "}
+                      <span className="text-blue-400 font-normal normal-case tracking-normal">
+                        ({matched.length}/{match_analysis.keywords_to_emphasize.length} matched)
+                      </span>
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {matched.map((k, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-200 font-medium">
+                          <span className="text-green-500">✓</span> {k}
+                        </span>
+                      ))}
+                      {missing.map((k, i) => {
+                        const entry = injectMap[k];
+                        if (entry?.status === "applied") {
+                          return (
+                            <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-200 font-medium">
+                              <span className="text-green-500">✓</span> {k}
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => !entry && handleInjectKeyword(k)}
+                            disabled={entry?.status === "loading" || entry?.status === "done"}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 text-xs rounded-full border border-amber-200 font-medium hover:bg-amber-100 disabled:cursor-default transition-colors"
+                          >
+                            {entry?.status === "loading" ? (
+                              <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            ) : (
+                              <span>↑</span>
+                            )}
+                            {k}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Injection results */}
+                    {Object.entries(injectMap).filter(([, e]) => e.status === "done").map(([keyword, entry]) => (
+                      <div key={keyword} className="mt-4 p-3 bg-white rounded-lg border border-amber-200">
+                        <p className="text-xs font-semibold text-amber-700 mb-2">Suggested fix for <em>{keyword}</em></p>
+                        <div className="space-y-2 mb-3">
+                          <div className="p-2 bg-gray-50 rounded text-xs text-gray-500 leading-relaxed line-through">
+                            {entry.originalBullet}
+                          </div>
+                          <div className="p-2 bg-green-50 rounded text-xs text-gray-800 leading-relaxed">
+                            {entry.improvedBullet}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApplyBullet(keyword)}
+                            className="px-3 py-1 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-700 transition-colors"
+                          >
+                            Apply
+                          </button>
+                          <button
+                            onClick={() => handleDismissBullet(keyword)}
+                            className="px-3 py-1 bg-white text-gray-500 text-xs font-semibold rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </section>
