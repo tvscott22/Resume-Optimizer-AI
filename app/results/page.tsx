@@ -34,6 +34,10 @@ export default function ResultsPage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [bulletsOpen, setBulletsOpen] = useState(true);
+  const [coverLetter, setCoverLetter] = useState("");
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [coverError, setCoverError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("optimizeResult");
@@ -68,21 +72,23 @@ export default function ResultsPage() {
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     const props = parseResumeToProps(resumeText, summaryOverride);
-    const { name, summary, experience, skills } = props;
+    const { name, contact, summary, experience, skills, skillCategories, certifications } = props;
 
     const expHTML = experience.map((job) => {
-      const bullets = job.bullets.map((b) => `<li style="font-size:12px;margin-bottom:4px">${esc(b)}</li>`).join("");
+      const bullets = job.bullets
+        .map((b) => `<li style="font-size:10px;margin-bottom:2px;line-height:1.45">${esc(b)}</li>`)
+        .join("");
       return `
-        <div style="margin-bottom:16px">
-          <div style="display:flex;justify-content:space-between">
-            <strong>${esc(job.role)}${job.company ? ` — ${esc(job.company)}` : ""}</strong>
-            <span style="font-size:12px;color:#555">${esc(job.dates)}</span>
+        <div style="margin-bottom:9px;page-break-inside:avoid">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+            <strong style="font-size:11px">${esc(job.role)}${job.company ? ` — ${esc(job.company)}` : ""}</strong>
+            <span style="font-size:10px;color:#555;white-space:nowrap;flex-shrink:0">${esc(job.dates)}</span>
           </div>
-          ${bullets ? `<ul style="padding-left:18px;margin-top:6px">${bullets}</ul>` : ""}
+          ${bullets ? `<ul style="padding-left:14px;margin-top:3px;list-style-type:disc">${bullets}</ul>` : ""}
         </div>`;
     }).join("");
 
-    const sectionHeader = `font-size:14px;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px`;
+    const sectionHeader = `font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#333;border-bottom:1px solid #e0e0e0;padding-bottom:4px;margin-bottom:10px`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -90,26 +96,51 @@ export default function ResultsPage() {
   <meta charset="utf-8">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } body { background: #fff; }</style>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #fff; font-family: Inter, -apple-system, sans-serif; }
+  </style>
 </head>
 <body>
-  <div id="resume" style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#111;line-height:1.4">
-    <h1 style="font-size:24px;font-weight:700;margin-bottom:8px">${esc(name)}</h1>
+  <div id="resume" style="width:100%;color:#111;line-height:1.45">
+    <div style="margin-bottom:12px">
+      <h1 style="font-size:16px;font-weight:700;margin-bottom:3px">${esc(name)}</h1>
+      ${contact.length ? `<p style="font-size:11px;color:#555">${contact.map(esc).join(" &nbsp;·&nbsp; ")}</p>` : ""}
+    </div>
 
-    <section style="margin-bottom:20px">
+    <div style="margin-bottom:11px">
       <h2 style="${sectionHeader}">Summary</h2>
-      <p style="font-size:12px">${esc(summary)}</p>
-    </section>
+      <p style="font-size:10.5px;line-height:1.5">${esc(summary)}</p>
+    </div>
 
-    <section style="margin-bottom:20px">
+    <div style="margin-bottom:11px">
+      <h2 style="${sectionHeader}">Skills</h2>
+      ${skillCategories.length
+        ? skillCategories.map((cat) => `
+          <div style="margin-top:5px">
+            ${cat.label ? `<span style="font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#555">${esc(cat.label)}: </span>` : ""}
+            <div style="columns:4;column-gap:10px;margin-top:2px">
+              ${cat.items.map((s) => `<div style="break-inside:avoid;font-size:9.5px;margin-bottom:2px">${esc(s)}</div>`).join("")}
+            </div>
+          </div>`).join("")
+        : `<div style="columns:4;column-gap:10px;margin-top:4px">
+            ${skills.map((s) => `<div style="break-inside:avoid;font-size:9.5px;margin-bottom:2px">${esc(s)}</div>`).join("")}
+          </div>`
+      }
+    </div>
+
+    ${certifications.length ? `
+    <div style="margin-bottom:11px">
+      <h2 style="${sectionHeader}">Certifications</h2>
+      <div style="margin-top:4px">
+        ${certifications.map((c) => `<div style="font-size:10.5px;margin-bottom:2px">• ${esc(c)}</div>`).join("")}
+      </div>
+    </div>` : ""}
+
+    <div>
       <h2 style="${sectionHeader}">Experience</h2>
       ${expHTML}
-    </section>
-
-    <section>
-      <h2 style="${sectionHeader}">Skills</h2>
-      <p style="font-size:12px">${skills.map(esc).join(", ")}</p>
-    </section>
+    </div>
   </div>
 </body>
 </html>`;
@@ -133,16 +164,18 @@ export default function ResultsPage() {
       const resumeEl = container.querySelector("#resume");
       if (!resumeEl) throw new Error("Resume element not found");
 
-      const safeName = (s: string) => s.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-      const filename = `resume_${safeName(company || "company")}_${safeName(role || "role")}.pdf`;
+      const candidateName = parseResumeToProps(result.rewritten_resume, "").name;
+      const safeName = (s: string) => s.replace(/[^a-z0-9 ]/gi, "").trim() || "Resume";
+      const filename = `${safeName(candidateName)} Resume.pdf`;
 
       await html2pdf()
         .set({
-          margin: 0,
+          margin: [40, 45, 40, 45],
           filename,
           image: { type: "jpeg", quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, letterRendering: true },
           jsPDF: { unit: "pt", format: "letter", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"] },
         })
         .from(resumeEl as HTMLElement)
         .save();
@@ -154,6 +187,165 @@ export default function ResultsPage() {
         document.body.removeChild(container);
       }
       setPdfLoading(false);
+    }
+  }
+
+  async function handleDownloadDOCX() {
+    if (!result) return;
+    try {
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle } = await import("docx");
+      const props = parseResumeToProps(result.rewritten_resume, result.summary_section);
+      const { name, contact, summary, experience, skills, skillCategories, certifications } = props;
+
+      const sectionHeading = (text: string) =>
+        new Paragraph({
+          children: [new TextRun({ text, bold: true, size: 22, allCaps: true, color: "333333" })],
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 80 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "DDDDDD", space: 4 } },
+        });
+
+      const children = [
+        new Paragraph({
+          children: [new TextRun({ text: name, bold: true, size: 32 })],
+          spacing: { after: 40 },
+        }),
+        ...(contact.length
+          ? [new Paragraph({
+              children: [new TextRun({ text: contact.join(" · "), color: "555555", size: 18 })],
+              spacing: { after: 180 },
+            })]
+          : []),
+
+        sectionHeading("Summary"),
+        new Paragraph({
+          children: [new TextRun({ text: summary, size: 20 })],
+          spacing: { after: 180 },
+        }),
+
+        sectionHeading("Skills"),
+        new Paragraph({
+          children: [new TextRun({
+            text: skillCategories.length
+              ? skillCategories.map((cat) => cat.label ? `${cat.label}: ${cat.items.join(", ")}` : cat.items.join(", ")).join("  |  ")
+              : skills.join(", "),
+            size: 20,
+          })],
+          spacing: { after: 180 },
+        }),
+
+        sectionHeading("Experience"),
+        ...experience.flatMap((job) => [
+          new Paragraph({
+            children: [
+              new TextRun({ text: job.role + (job.company ? ` — ${job.company}` : ""), bold: true, size: 20 }),
+              ...(job.dates ? [new TextRun({ text: `  |  ${job.dates}`, color: "555555", size: 20 })] : []),
+            ],
+            spacing: { before: 140, after: 40 },
+          }),
+          ...job.bullets.map((b) =>
+            new Paragraph({
+              children: [new TextRun({ text: b, size: 20 })],
+              bullet: { level: 0 },
+              spacing: { after: 40 },
+            })
+          ),
+        ]),
+
+        ...(certifications.length
+          ? [
+              sectionHeading("Certifications"),
+              ...certifications.map((c) =>
+                new Paragraph({
+                  children: [new TextRun({ text: c, size: 20 })],
+                  bullet: { level: 0 },
+                  spacing: { after: 40 },
+                })
+              ),
+            ]
+          : []),
+      ];
+
+      const doc = new Document({ sections: [{ properties: {}, children }] });
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name.replace(/[^a-z0-9 ]/gi, "").trim() || "Resume"} Resume.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("DOCX generation failed:", err);
+    }
+  }
+
+  async function handleGenerateCoverLetter() {
+    if (!result) return;
+    setCoverLoading(true);
+    setCoverError("");
+    setCoverLetter("");
+    try {
+      const res = await fetch("/api/cover-letter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume: result.rewritten_resume,
+          jobDescription: result.jobDescription,
+          company,
+          role,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate cover letter.");
+      setCoverLetter(data.cover_letter);
+    } catch (err: unknown) {
+      setCoverError(err instanceof Error ? err.message : "Unexpected error.");
+    } finally {
+      setCoverLoading(false);
+    }
+  }
+
+  async function handleCopyCoverLetter() {
+    await navigator.clipboard.writeText(coverLetter);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleDownloadCoverLetterPDF() {
+    let container: HTMLDivElement | null = null;
+    try {
+      const { default: html2pdf } = await import("html2pdf.js");
+      const safeName = (s: string) => s.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+      const filename = `cover_letter_${safeName(company || "company")}_${safeName(role || "role")}.pdf`;
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+        <style>*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,-apple-system,sans-serif;color:#111;line-height:1.7;font-size:12px;white-space:pre-wrap}</style>
+        </head><body><div id="cover">${coverLetter.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div></body></html>`;
+
+      container = document.createElement("div");
+      container.innerHTML = html;
+      container.style.cssText = "position:absolute;left:-9999px;top:0;width:816px;";
+      document.body.appendChild(container);
+
+      const el = container.querySelector("#cover");
+      if (!el) throw new Error("Cover letter element not found");
+
+      await html2pdf()
+        .set({
+          margin: [50, 55, 50, 55],
+          filename,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "pt", format: "letter", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"] },
+        })
+        .from(el as HTMLElement)
+        .save();
+    } catch (err) {
+      console.error("Cover letter PDF failed:", err);
+    } finally {
+      if (container && document.body.contains(container)) document.body.removeChild(container);
     }
   }
 
@@ -261,6 +453,16 @@ export default function ResultsPage() {
             <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
               Resume Comparison
             </h2>
+            <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadDOCX}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 text-xs font-semibold rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Word / Pages
+            </button>
             <button
               onClick={handleDownloadPDF}
               disabled={pdfLoading}
@@ -308,6 +510,7 @@ export default function ResultsPage() {
                 </>
               )}
             </button>
+            </div>
           </div>
           {pdfError && (
             <p className="mt-2 text-xs text-red-500">{pdfError}</p>
@@ -397,6 +600,79 @@ export default function ResultsPage() {
             )}
           </section>
         )}
+
+        {/* Cover Letter */}
+        <section className="mb-5 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                Cover Letter
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                AI-written using your optimized resume and the job description.
+              </p>
+            </div>
+            {!coverLetter && (
+              <button
+                onClick={handleGenerateCoverLetter}
+                disabled={coverLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm shrink-0"
+              >
+                {coverLoading ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Writing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    Generate Cover Letter
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {coverError && (
+            <p className="text-sm text-red-500 mb-3">{coverError}</p>
+          )}
+
+          {coverLetter && (
+            <>
+              <pre className="p-5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-sans whitespace-pre-wrap leading-relaxed text-gray-800 max-h-[520px] overflow-y-auto mb-4">
+                {coverLetter}
+              </pre>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCopyCoverLetter}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  {copied ? "Copied ✓" : "Copy Text"}
+                </button>
+                <button
+                  onClick={handleDownloadCoverLetterPDF}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => { setCoverLetter(""); setCoverError(""); }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Regenerate
+                </button>
+              </div>
+            </>
+          )}
+        </section>
 
         {/* Save Application */}
         <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">

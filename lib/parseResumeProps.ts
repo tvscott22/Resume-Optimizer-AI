@@ -1,7 +1,7 @@
 import type { ResumeProps } from "@/components/ResumeTemplate";
 
 const BULLET_RE    = /^[-•*]\s*/;
-const SECTION_RE   = /^(SUMMARY|PROFESSIONAL SUMMARY|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|SKILLS|TECHNICAL SKILLS|EDUCATION)$/i;
+const SECTION_RE   = /^(SUMMARY|PROFESSIONAL SUMMARY|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|SKILLS|TECHNICAL SKILLS|EDUCATION|CERTIFICATIONS?|LICENSES? & CERTIFICATIONS?|LICENSES? AND CERTIFICATIONS?)$/i;
 // Matches lines that are primarily a date range, e.g. "Jan 2021 – Present" or "2019 – 2022"
 const DATE_LINE_RE = /^\s*[\w\s,]*\d{4}\s*[-–—]\s*([\w\s,]*\d{4}|present|current)\s*$/i;
 
@@ -67,9 +67,10 @@ export function parseResumeToProps(
 ): ResumeProps {
   const { header, sections } = parseSections(resumeText);
 
-  // ── Name ──
+  // ── Name + Contact ──
   const nonEmpty = header.filter(Boolean);
   const name = nonEmpty[0] ?? "";
+  const contact = nonEmpty.slice(1);
 
   // ── Summary ──
   const summarySection = sections.find((s) => s.label.includes("SUMMARY"));
@@ -90,14 +91,34 @@ export function parseResumeToProps(
 
   // ── Skills ──
   const skillsSection = sections.find((s) => s.label.includes("SKILL"));
-  const skills: string[] = skillsSection
-    ? skillsSection.lines
+  const skillLines = skillsSection ? skillsSection.lines.filter(Boolean) : [];
+  const hasCategories = skillLines.some((l) => /^[^,\-•*]+:\s/.test(l));
+
+  const skillCategories: { label: string; items: string[] }[] = hasCategories
+    ? skillLines.map((l) => {
+        const colonIdx = l.indexOf(":");
+        if (colonIdx > -1) {
+          return {
+            label: l.slice(0, colonIdx).trim(),
+            items: l.slice(colonIdx + 1).split(/[,|]/).map((s) => s.replace(BULLET_RE, "").trim()).filter(Boolean),
+          };
+        }
+        return { label: "", items: l.split(/[,|]/).map((s) => s.replace(BULLET_RE, "").trim()).filter(Boolean) };
+      })
+    : [];
+
+  const skills: string[] = hasCategories
+    ? []
+    : skillLines.join(", ").split(/[,|]/).map((s) => s.replace(BULLET_RE, "").trim()).filter(Boolean);
+
+  // ── Certifications ──
+  const certSection = sections.find((s) => s.label.includes("CERTIF"));
+  const certifications: string[] = certSection
+    ? certSection.lines
         .filter(Boolean)
-        .join(", ")
-        .split(/[,|]/)
         .map((s) => s.replace(BULLET_RE, "").trim())
         .filter(Boolean)
     : [];
 
-  return { name, summary, experience, skills };
+  return { name, contact, summary, experience, skills, skillCategories, certifications };
 }

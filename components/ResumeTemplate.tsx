@@ -1,5 +1,6 @@
 export type ResumeProps = {
   name: string
+  contact: string[]
   summary: string
   experience: {
     company: string
@@ -8,10 +9,13 @@ export type ResumeProps = {
     bullets: string[]
   }[]
   skills: string[]
+  skillCategories: { label: string; items: string[] }[]
+  certifications: string[]
 }
 
 export default function ResumeTemplate({
   name,
+  contact,
   summary,
   experience,
   skills,
@@ -29,9 +33,14 @@ export default function ResumeTemplate({
       }}
     >
       {/* HEADER */}
-      <h1 style={{ fontSize: "24px", fontWeight: 700, marginBottom: "8px" }}>
+      <h1 style={{ fontSize: "24px", fontWeight: 700, marginBottom: "4px" }}>
         {name}
       </h1>
+      {contact.length > 0 && (
+        <p style={{ fontSize: "12px", color: "#555", marginBottom: "16px" }}>
+          {contact.join(" · ")}
+        </p>
+      )}
 
       {/* SUMMARY */}
       <section style={{ marginBottom: "20px" }}>
