@@ -2,6 +2,8 @@
 
 An AI-powered resume optimization platform that tailors your resume to any job description — improving ATS compatibility, surfacing keyword gaps, and generating cover letters in seconds.
 
+Many qualified candidates miss the first round not because they lack the experience, but because they don't articulate it in a way that maps to the role. Resume Optimizer AI never fabricates experience — it rewrites what you already have to communicate it more clearly and in language that resonates with the job description.
+
 **[Live Demo →](https://resume-optimizer-ai-two.vercel.app)** *(password: resoptbeta26)*
 
 ---
