@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import PDFParser from "pdf2json";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { TextItem } from "pdfjs-dist/types/src/display/api.js";
 
 export const runtime = "nodejs";
+
+// Disable the worker — runs in-thread, which is correct for serverless
+pdfjs.GlobalWorkerOptions.workerSrc = "";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,27 +17,25 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const data = new Uint8Array(buffer);
 
-    const text = await new Promise<string>((resolve, reject) => {
-      // Pass true as second arg to enable raw text collection via getRawTextContent()
-      const parser = new PDFParser(null, true);
+    const loadingTask = pdfjs.getDocument({ data, useWorkerFetch: false, isEvalSupported: false });
+    const pdf = await loadingTask.promise;
 
-      parser.on("pdfParser_dataReady", () => {
-        resolve(parser.getRawTextContent());
-      });
+    const pageTexts: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .filter((item): item is TextItem => "str" in item)
+        .map((item) => item.str)
+        .join(" ");
+      pageTexts.push(pageText);
+    }
 
-      parser.on("pdfParser_dataError", (err) => {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : String((err as { parserError?: unknown }).parserError ?? "PDF parse error");
-        reject(new Error(msg));
-      });
+    const text = pageTexts.join("\n\n").trim();
 
-      parser.parseBuffer(buffer);
-    });
-
-    if (!text.trim()) {
+    if (!text) {
       return NextResponse.json(
         { error: "No text found in this PDF. It may be a scanned/image-based file." },
         { status: 422 }
