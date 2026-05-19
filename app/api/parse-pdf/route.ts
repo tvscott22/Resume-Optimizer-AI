@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractText } from "unpdf";
+import Anthropic from "@anthropic-ai/sdk";
+import type { DocumentBlockParam } from "@anthropic-ai/sdk/resources/messages/messages";
 
 export const runtime = "nodejs";
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,17 +16,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided." }, { status: 400 });
     }
 
-    const buffer = new Uint8Array(await file.arrayBuffer());
-    const { text } = await extractText(buffer, { mergePages: true });
+    const buffer = await file.arrayBuffer();
 
-    if (!text?.trim()) {
+    // Fast path: try direct text extraction for text-based PDFs
+    const { text: rawText } = await extractText(new Uint8Array(buffer), { mergePages: true });
+
+    if (rawText?.trim()) {
+      return NextResponse.json({ text: rawText.trim() });
+    }
+
+    // Fallback: use Claude to OCR scanned/image-based PDFs
+    const base64 = Buffer.from(buffer).toString("base64");
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: base64 },
+            } as DocumentBlockParam,
+            {
+              type: "text",
+              text: "Extract all text from this resume exactly as it appears. Output only the extracted text — no commentary, formatting changes, or additional content.",
+            },
+          ],
+        },
+      ],
+    });
+
+    const ocrText = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+
+    if (!ocrText) {
       return NextResponse.json(
-        { error: "No text found in this PDF. It may be a scanned/image-based file." },
+        { error: "Could not extract text from this PDF. Try copying and pasting your resume text directly." },
         { status: 422 }
       );
     }
 
-    return NextResponse.json({ text });
+    return NextResponse.json({ text: ocrText });
   } catch (err: unknown) {
     console.error(err);
     return NextResponse.json(
