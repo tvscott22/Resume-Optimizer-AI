@@ -16,17 +16,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided." }, { status: 400 });
     }
 
-    const buffer = await file.arrayBuffer();
+    // Copy into a Node.js Buffer immediately — ArrayBuffer can be detached after first use
+    const nodeBuffer = Buffer.from(await file.arrayBuffer());
 
     // Fast path: try direct text extraction for text-based PDFs
-    const { text: rawText } = await extractText(new Uint8Array(buffer), { mergePages: true });
+    const { text: rawText } = await extractText(new Uint8Array(nodeBuffer), { mergePages: true });
 
     if (rawText?.trim()) {
       return NextResponse.json({ text: rawText.trim() });
     }
 
     // Fallback: use Claude to OCR scanned/image-based PDFs
-    const base64 = Buffer.from(buffer).toString("base64");
+    const base64 = nodeBuffer.toString("base64");
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
