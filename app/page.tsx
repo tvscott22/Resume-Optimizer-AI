@@ -28,6 +28,7 @@ export default function Home() {
         file.type === "application/pdf"
       ) {
         const pdfjsLib = await import("pdfjs-dist");
+        // Worker must match the same build (main, not legacy) as the import above
         pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
         const arrayBuffer = await file.arrayBuffer();
