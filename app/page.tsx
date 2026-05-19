@@ -27,13 +27,12 @@ export default function Home() {
         file.name.endsWith(".pdf") ||
         file.type === "application/pdf"
       ) {
-        const { PDFParse } = await import("pdf-parse");
-        const arrayBuffer = await file.arrayBuffer();
-        const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) });
-        const result = await parser.getText();
-        const text = result.text.trim();
-        if (!text) throw new Error("No text found. This PDF may be image-based.");
-        setResume(text);
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/parse-pdf", { method: "POST", body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to parse PDF.");
+        setResume(data.text);
       } else {
         throw new Error("Unsupported file type. Use .txt or .pdf");
       }

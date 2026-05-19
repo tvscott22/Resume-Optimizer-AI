@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { TextItem } from "pdfjs-dist/types/src/display/api.js";
+import { pathToFileURL } from "url";
+import { resolve } from "path";
 
 export const runtime = "nodejs";
 
-// Disable the worker — runs in-thread, which is correct for serverless
-pdfjs.GlobalWorkerOptions.workerSrc = "";
+// In Node.js, pdfjs needs a file:// URL pointing to the worker — not an empty string
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+  resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
+).href;
 
 export async function POST(req: NextRequest) {
   try {
