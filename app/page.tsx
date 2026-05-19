@@ -27,12 +27,26 @@ export default function Home() {
         file.name.endsWith(".pdf") ||
         file.type === "application/pdf"
       ) {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch("/api/parse-pdf", { method: "POST", body: formData });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to parse PDF.");
-        setResume(data.text);
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+
+        const pages: string[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const pageText = content.items
+            .filter((item) => "str" in item)
+            .map((item) => (item as { str: string }).str)
+            .join(" ");
+          pages.push(pageText);
+        }
+
+        const text = pages.join("\n\n").trim();
+        if (!text) throw new Error("No text found. This PDF may be image-based.");
+        setResume(text);
       } else {
         throw new Error("Unsupported file type. Use .txt or .pdf");
       }
