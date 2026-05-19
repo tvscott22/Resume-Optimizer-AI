@@ -15,22 +15,30 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const text = await new Promise<string>((resolve, reject) => {
-      const parser = new PDFParser();
+      // Pass true as second arg to enable raw text collection via getRawTextContent()
+      const parser = new PDFParser(null, true);
 
-      parser.on("pdfParser_dataReady", (data) => {
-        const decode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
-        const pages: string[] = data.Pages.map((page) =>
-          page.Texts.map((t) => t.R.map((r) => decode(r.T)).join("")).join(" ")
-        );
-        resolve(pages.join("\n\n"));
+      parser.on("pdfParser_dataReady", () => {
+        resolve(parser.getRawTextContent());
       });
 
       parser.on("pdfParser_dataError", (err) => {
-        reject(new Error(String(err.parserError ?? "PDF parse error")));
+        const msg =
+          err instanceof Error
+            ? err.message
+            : String((err as { parserError?: unknown }).parserError ?? "PDF parse error");
+        reject(new Error(msg));
       });
 
       parser.parseBuffer(buffer);
     });
+
+    if (!text.trim()) {
+      return NextResponse.json(
+        { error: "No text found in this PDF. It may be a scanned/image-based file." },
+        { status: 422 }
+      );
+    }
 
     return NextResponse.json({ text });
   } catch (err: unknown) {
