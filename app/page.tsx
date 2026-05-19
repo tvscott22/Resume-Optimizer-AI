@@ -27,25 +27,11 @@ export default function Home() {
         file.name.endsWith(".pdf") ||
         file.type === "application/pdf"
       ) {
-        const pdfjsLib = await import("pdfjs-dist");
-        // Worker must match the same build (main, not legacy) as the import above
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-
+        const { PDFParse } = await import("pdf-parse");
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-
-        const pages: string[] = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          const pageText = content.items
-            .filter((item) => "str" in item)
-            .map((item) => (item as { str: string }).str)
-            .join(" ");
-          pages.push(pageText);
-        }
-
-        const text = pages.join("\n\n").trim();
+        const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) });
+        const result = await parser.getText();
+        const text = result.text.trim();
         if (!text) throw new Error("No text found. This PDF may be image-based.");
         setResume(text);
       } else {
